@@ -6,7 +6,8 @@
 ```
 https://github.com/dividduang/option
 ```
-```使用方法
+# 使用方法
+```
 复制到对应的路径即可
 ```
 <img src="./docs/tu.jpg" width="300" height="300">
