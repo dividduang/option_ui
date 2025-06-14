@@ -9,5 +9,6 @@ https://github.com/dividduang/option
 # 使用方法
 ```
 复制到对应的路径即可
+option_ui\apps\web-antd\src\views\option\components\OptionForm.vue 第194行更换key
 ```
 <img src="./docs/tu.jpg" width="300" height="300">
