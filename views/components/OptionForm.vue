@@ -1,14 +1,14 @@
 <script lang="ts" setup>
-import type { SaveConfigParams } from '#/api/option';
+import type { SaveConfigParams } from '#/plugins/option/api';
 
 import { computed, reactive, ref, watch } from 'vue';
-import VueJsonPretty from 'vue-json-pretty';
-import 'vue-json-pretty/lib/styles.css';
+
+import { JsonViewer } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
-import axios from 'axios';
 
-import { saveConfigApi, updateConfigApi } from '#/api/option';
+import { baseRequestClient } from '#/api/request';
+import { saveConfigApi, updateConfigApi } from '#/plugins/option/api';
 
 const props = defineProps<{
   apiKey?: string;
@@ -134,42 +134,17 @@ const handleSubmit = async () => {
   try {
     loading.value = true;
 
-    let result;
-
     // 判断是新增还是编辑模式
     if (props.apiKey) {
       // 编辑模式：使用updateConfigApi
-      result = await updateConfigApi(props.apiKey, configData);
+      await updateConfigApi(props.apiKey, configData);
     } else {
       // 新增模式：使用saveConfigApi
       const params: SaveConfigParams = {
         name: formState.name,
         config_data: configData,
       };
-      result = await saveConfigApi(params);
-    }
-
-    // 处理不同的响应格式
-    interface ResponseWithData {
-      data?: any;
-      code?: number;
-      msg?: string;
-      status?: number;
-    }
-
-    const response = result as ResponseWithData;
-
-    if (response.code === 200 || response.status === 200) {
-      setTimeout(() => {
-        emit('success');
-      }, 100);
-    } else {
-      // 尝试获取错误消息
-      const errorMsg =
-        response.msg ||
-        (response.data && (response.data.msg || '')) ||
-        '未知错误';
-      throw new Error(`操作失败: ${errorMsg}`);
+      await saveConfigApi(params);
     }
   } catch (error: any) {
     const errorMsg = error?.response?.data?.msg || error?.message || '未知错误';
@@ -219,7 +194,7 @@ const handleAiConvert = async () => {
         Authorization: `Bearer ${apiKey}`,
       },
     };
-    const response = await axios.post(url, data, config);
+    const response = await baseRequestClient.post(url, data, config);
     // 假设返回格式为 { choices: [{ message: { content: 'xxx' } }] }
     const result = response.data?.choices?.[0]?.message?.content;
     if (result) {
@@ -365,13 +340,13 @@ const currentConfigJson = computed(() => {
       </div>
       <div class="option-form-right">
         <div class="json-viewer-header">当前配置 JSON</div>
-        <VueJsonPretty :data="currentConfigJson" :deep="3" />
+        <JsonViewer :value="currentConfigJson" :expand-depth="3" />
       </div>
     </div>
   </div>
 </template>
 
-<style lang="less" scoped>
+<style lang="scss" scoped>
 .option-form-flex {
   display: flex;
   gap: 24px;

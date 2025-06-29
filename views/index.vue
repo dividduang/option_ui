@@ -14,16 +14,10 @@ import {
   getApiKeyById,
   getConfigByApiKey,
   getConfigInfoApi,
-} from '#/api/option';
+} from '#/plugins/option/api';
+import OptionForm from '#/plugins/option/views/components/OptionForm.vue';
 import { generateAccess } from '#/router/access';
 import { accessRoutes } from '#/router/routes';
-
-import { OptionForm } from './components';
-
-// 设置元数据，只使用核心路由中的配置
-defineOptions({
-  name: 'Option',
-});
 
 const configList = ref<ConfigItem[]>([]);
 const isModalVisible = ref(false);
@@ -78,37 +72,8 @@ const fetchConfigList = async () => {
   try {
     loading.value = true;
     errorMsg.value = null;
-
     const res = await getConfigInfoApi();
-
-    // 处理响应数据，兼容不同的返回格式
-    if (res?.data?.configs) {
-      // 标准格式，直接使用
-      configList.value = res.data.configs;
-    } else if (res?.configs) {
-      // 备选格式1，configs在顶层
-      configList.value = res.configs;
-    } else if (res?.data?.data?.configs) {
-      // 备选格式2，configs在data.data中
-      configList.value = res.data.data.configs;
-    } else if (res?.data) {
-      // 如果有data但没有预期的结构，尝试检查是否为直接的configs数组
-      const dataObj = res.data;
-      if (Array.isArray(dataObj)) {
-        configList.value = dataObj;
-      } else if (dataObj.code === 200 && dataObj.data && dataObj.data.configs) {
-        // 处理嵌套在一层data中的情况
-        configList.value = dataObj.data.configs;
-      } else {
-        configList.value = [];
-      }
-    } else {
-      configList.value = [];
-    }
-
-    if (configList.value.length === 0) {
-      // do nothing
-    }
+    configList.value = res.configs;
   } catch (error: any) {
     console.error('获取配置列表失败', error);
     console.error('错误详情:', error?.response || error?.message || error);
@@ -123,31 +88,7 @@ const fetchConfigList = async () => {
 const handleCopyApiKey = async (item: ConfigItem) => {
   try {
     loading.value = true;
-    const res = await getApiKeyById(item.api_key_id);
-    // 使用类型断言处理不同响应结构
-    interface ResponseWithData {
-      data: any;
-      code?: number;
-      msg?: string;
-    }
-    const response = res as ResponseWithData;
-    let apiKey: null | string = null;
-
-    if (response && typeof response.data === 'string') {
-      // 直接是字符串
-      apiKey = response.data;
-    } else if (response.data && typeof response.data === 'object') {
-      const nestedData = response.data as ResponseWithData;
-
-      if (typeof nestedData.data === 'string') {
-        // 嵌套格式: { data: { data: 'string' } }
-        apiKey = nestedData.data;
-      } else if (nestedData.code === 200 && nestedData.data) {
-        // 两层嵌套带状态码: { data: { code: 200, data: 'string' } }
-        apiKey = typeof nestedData.data === 'string' ? nestedData.data : null;
-      }
-    }
-
+    const apiKey = await getApiKeyById(item.api_key_id);
     if (apiKey) {
       await copy(apiKey);
       message.success('API Key已复制到剪贴板');
@@ -170,69 +111,16 @@ const handleEditConfig = async (item: ConfigItem) => {
     currentApiKey.value = null;
 
     // 获取该配置的详细配置数据
-    const res = await getApiKeyById(item.api_key_id);
-
-    // 处理不同的响应格式，获取API Key
-    interface ResponseWithData {
-      data: any;
-      code?: number;
-      msg?: string;
-    }
-
-    const response = res as ResponseWithData;
-    let apiKey: null | string = null;
-
-    if (response && typeof response.data === 'string') {
-      apiKey = response.data;
-    } else if (response.data && typeof response.data === 'object') {
-      const nestedData = response.data as ResponseWithData;
-      if (typeof nestedData.data === 'string') {
-        apiKey = nestedData.data;
-      } else if (nestedData.code === 200 && nestedData.data) {
-        apiKey = typeof nestedData.data === 'string' ? nestedData.data : null;
-      }
-    }
+    const apiKey = await getApiKeyById(item.api_key_id);
 
     if (apiKey) {
       // 保存API Key以便编辑时使用
       currentApiKey.value = apiKey;
 
       // 使用获取到的API Key获取配置数据
-      const configRes = await getConfigByApiKey(apiKey);
-
-      // 处理不同的配置数据响应格式
-      let configDataObj: null | Record<string, string> = null;
-      const configResponse = configRes as ResponseWithData;
-
-      if (configResponse.data && configResponse.data.config_data) {
-        // 标准格式: { data: { config_data: {...} } }
-        configDataObj = configResponse.data.config_data;
-      } else if (
-        configResponse.data &&
-        typeof configResponse.data === 'object'
-      ) {
-        interface ConfigDataResponse {
-          data?: any;
-          config_data?: Record<string, string>;
-        }
-
-        const configNestedData = configResponse.data as ConfigDataResponse;
-
-        if (configNestedData.data && configNestedData.data.config_data) {
-          // 嵌套格式: { data: { data: { config_data: {...} } } }
-          configDataObj = configNestedData.data.config_data;
-        } else if (configNestedData.config_data) {
-          // 简单嵌套: { data: { config_data: {...} } }
-          configDataObj = configNestedData.config_data;
-        }
-      }
-
-      if (configDataObj) {
-        configData.value = configDataObj;
-        isModalVisible.value = true;
-      } else {
-        throw new Error('无法获取配置数据，响应格式不符合预期');
-      }
+      const res = await getConfigByApiKey(apiKey);
+      configData.value = res.config_data;
+      isModalVisible.value = true;
     } else {
       throw new Error('无法获取API Key');
     }
@@ -280,22 +168,9 @@ const handleDeleteConfig = (item: ConfigItem) => {
     onOk: async () => {
       try {
         loading.value = true;
-        const res = await deleteConfigByIdApi(item.api_key_id);
-
-        // 判断不同的响应格式
-        if (
-          res &&
-          (res.code === 200 ||
-            res.status === 200 ||
-            (res.data && res.data.code === 200))
-        ) {
-          message.success('删除成功');
-          fetchConfigList();
-        } else {
-          const errorMsg =
-            res?.msg || res?.data?.msg || '删除失败，请检查配置项ID是否正确';
-          throw new Error(errorMsg);
-        }
+        await deleteConfigByIdApi(item.api_key_id);
+        message.success('删除成功');
+        await fetchConfigList();
       } catch (error: any) {
         console.error('删除失败', error);
         message.error(error?.message || '删除失败');
@@ -424,7 +299,7 @@ onMounted(() => {
   </div>
 </template>
 
-<style lang="less" scoped>
+<style lang="scss" scoped>
 .option-container {
   padding: 24px;
   background-color: #f5f7fa;
@@ -538,29 +413,36 @@ onMounted(() => {
     background 0.2s,
     color 0.2s;
   letter-spacing: 2px;
-}
-.option-btn:last-child {
-  margin-right: 0;
-}
-.option-btn.copy {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-.option-btn.copy:hover {
-  background: #bae7ff;
-}
-.option-btn.edit {
-  background: #fffbe6;
-  color: #faad14;
-}
-.option-btn.edit:hover {
-  background: #ffe58f;
-}
-.option-btn.delete {
-  background: #fff1f0;
-  color: #ff4d4f;
-}
-.option-btn.delete:hover {
-  background: #ffa39e;
+
+  &:last-child {
+    margin-right: 0;
+  }
+
+  &.copy {
+    background: #e6f7ff;
+    color: #1890ff;
+
+    &:hover {
+      background: #bae7ff;
+    }
+  }
+
+  &.edit {
+    background: #fffbe6;
+    color: #faad14;
+
+    &:hover {
+      background: #ffe58f;
+    }
+  }
+
+  &.delete {
+    background: #fff1f0;
+    color: #ff4d4f;
+
+    &:hover {
+      background: #ffa39e;
+    }
+  }
 }
 </style>
